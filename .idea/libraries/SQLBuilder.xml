@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="SQLBuilder">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/../SQLBuilder/out/artifacts/SQLBuilder_jar/SQLBuilder.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

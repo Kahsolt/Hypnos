@@ -1,0 +1,9 @@
+<component name="ArtifactManager">
+  <artifact type="jar" build-on-make="true" name="Hypnos-min:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/Hypnos_min_jar</output-path>
+    <root id="archive" name="Hypnos.jar">
+      <element id="module-output" name="Hypnos" />
+      <element id="library" level="project" name="SQLBuilder" />
+    </root>
+  </artifact>
+</component>
