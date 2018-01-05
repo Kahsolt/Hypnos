@@ -8,8 +8,7 @@ import java.lang.annotation.*;
 public @interface FieldEntry {
 
     /*
-     *  <此注解是必要的>
-     *    需要注册到数据库的字段必须注释以model.FieldEntry，且建议为public修饰
+     *  用来注册类字段到数据库列的映射，建议字段为public修饰
      */
 
     /*

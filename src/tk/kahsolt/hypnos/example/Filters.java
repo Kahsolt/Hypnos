@@ -1,10 +1,10 @@
 package tk.kahsolt.hypnos.example;
 
 import tk.kahsolt.hypnos.Hypnos;
-import tk.kahsolt.hypnos.model.FieldEntry;
+import tk.kahsolt.hypnos.model.*;
 import tk.kahsolt.hypnos.model.Manager;
-import tk.kahsolt.hypnos.model.Model;
 
+import java.util.ArrayList;
 import java.util.Random;
 
 public class Filters extends Model {

@@ -1,5 +1,6 @@
 package tk.kahsolt.hypnos.example.blog;
 
+import tk.kahsolt.hypnos.example.Types;
 import tk.kahsolt.hypnos.model.*;
 
 import java.util.ArrayList;
@@ -72,17 +73,18 @@ public class User extends Model {
         return this.age >= 18;
     }
 
-    // 重载一个toString()会比较好看
     @Override
     public String toString() {
         return "User{" +
-                "username='" + username + '\'' +
+                "id=" + getId() +
+                ", username='" + username + '\'' +
                 ", password='" + password + '\'' +
-                ", id=" + getId() +
+                ", gender='" + gender + '\'' +
+                ", age=" + age +
+                ", money=" + money +
                 ", create_time=" + getCreateTime() +
                 ", update_time=" + getUpdateTime() +
                 '}';
     }
-
 }
 

@@ -89,16 +89,8 @@ public class Demo {
         loginUser.leaveout();
         System.out.println("用户存在状态：" + loginUser.exists());
 
-        // 强制再压库，现在可手动查看数据库，User表应有一条记录
-        // 而注意由于设置了外键级联删除，因此Message表空
-        // 因此请小心设置外键规则，并谨慎使用push()
-        loginUser.push();
-        System.out.println("User counts = " + User.objects.count());
-        System.out.println("Message counts = " + Message.objects.count());
-
         // 这些操作对模型管理器是无效的
         User.objects.save();
-        User.objects.push();
         User.objects.remove();
 
         // 4.关闭引擎

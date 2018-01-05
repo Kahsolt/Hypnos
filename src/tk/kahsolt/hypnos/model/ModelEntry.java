@@ -8,8 +8,7 @@ import java.lang.annotation.*;
 public @interface ModelEntry {
 
     /*
-     *  [此注解不是必要的]
-     *    用来制定模型类建表时的一些参数(对MySQL有效)
+     *  用来制定模型类建表时的一些参数(对MySQL有效)
      */
 
     /*

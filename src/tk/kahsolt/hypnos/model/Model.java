@@ -8,6 +8,7 @@
 
 package tk.kahsolt.hypnos.model;
 
+import jdk.nashorn.internal.parser.DateParser;
 import org.apache.log4j.Logger;
 import tk.kahsolt.hypnos.db.SQLEngine;
 import tk.kahsolt.hypnos.db.MySQLEngine;
@@ -19,10 +20,10 @@ import tk.kahsolt.sqlbuilder.sql.Table;
 import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Field;
 import java.sql.*;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.ArrayList;
-import java.util.UUID;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.util.*;
+import java.util.Date;
 
 public abstract class Model {
 
@@ -40,7 +41,10 @@ public abstract class Model {
 
     // Kernels & Caches
     private static SQLEngine dbEngine;      // Hypnos注入的数据库引擎
-    private HashMap<String, Object> copy;   // 保存每个模型的自定义字段值的副本，实现增量UPDATE
+    private static HashMap<Class<? extends Model>, Object> managers;            // 各模型管理器的登记表
+    private static HashMap<Class<? extends Model>, ArrayList<Object>> caches;   // 各模型集合列表的登记表
+    private static HashMap<Class<? extends Model>, Boolean> modes;              // 各模型工作模式(true离线有cache/false在线无cache)
+    private HashMap<String, Object> copy;   // 在线模式(无cache)下，保存每个模型的自定义字段值的副本，实现增量UPDATE
     private static HashMap<String, String> sqlTemplates = new HashMap<>();  // 缓存SQL模板语句
 
     // Helper & Connection control tools
@@ -57,28 +61,157 @@ public abstract class Model {
     private Timestamp update_time;
 
     // Operations on the table
-    private ArrayList<Object> findByOperator(String field, CompareOperator operator, Object... values) {
-        String clazzName = this.getClass().getSimpleName();
-        String sqlName = String.format("find_%s(%s)_%s", clazzName, field, operator);
-        String sql = sqlTemplates.get(sqlName);
-        if(sql==null) {
-            Query.Condition sqlCond = sqlBuilder.select("*")
-                    .from(clazzName).where(field);
+    private boolean compare(Object model, Field field, Object rvalue, CompareOperator operator) {
+        Object lvalue;
+        try {
+            field.setAccessible(true);
+            lvalue = field.get(model);
+        } catch (IllegalAccessException e) { return false; }
+
+        Class<?> type = field.getType();
+        if(TypeMap.isNumeric(type)) {
+            double rval;
+            if(rvalue instanceof Number) {
+                rval = Double.parseDouble(String.valueOf(rvalue));
+            } else if(rvalue instanceof String) {
+                rval = Double.valueOf((String) rvalue);
+            } else return false;
+            double lval = Double.parseDouble(String.valueOf(lvalue));
             switch (operator) {
-                case NULL:          sql = sqlCond.isnull().end(); break;
-                case NOT_NULL:      sql = sqlCond.isnotnull().end(); break;
-                case EQUAL:         sql = sqlCond.eq().end(); break;
-                case NOT_EQUAL:     sql = sqlCond.ne().end(); break;
-                case GREATER:       sql = sqlCond.gt().end(); break;
-                case GREATER_EQUAL: sql = sqlCond.ge().end(); break;
-                case LESS:          sql = sqlCond.lt().end(); break;
-                case LESS_EQUAL:    sql = sqlCond.le().end(); break;
-                case BETWEEN:       sql = sqlCond.between().end(); break;
-                case LIKE:          sql = sqlCond.like().end(); break;
+                case EQUAL:         return lval==rval;
+                case NOT_EQUAL:     return lval!=rval;
+                case GREATER:       return lval>rval;
+                case GREATER_EQUAL: return lval>=rval;
+                case LESS:          return lval<rval;
+                case LESS_EQUAL:    return lval<=rval;
             }
-            sqlTemplates.put(sqlName, sql);
+        } else if(TypeMap.isTemporal(type)) {
+            Date rval;
+            if(rvalue instanceof Date) {
+                rval = ((Date) rvalue);
+            } else if (rvalue instanceof String) {
+                try {
+                    rval = DateFormat.getInstance().parse((String) rvalue);
+                } catch (ParseException e) {
+                    return false;
+                }
+            } else return false;
+            Date lval = ((Date) lvalue);
+            switch (operator) {
+                case EQUAL:         return lval==rval;
+                case NOT_EQUAL:     return lval!=rval;
+                case GREATER:
+                case GREATER_EQUAL: return lval.after(rval);
+                case LESS:
+                case LESS_EQUAL:    return lval.before(rval);
+            }
+        } else {    // Textual
+            String rval = (String) rvalue;
+            String lval = (String) lvalue;
+            switch (operator) {
+                case EQUAL:         return lval.equals(rval);
+                case NOT_EQUAL:     return !lval.equals(rval);
+                case GREATER:       return lval.compareTo(rval) > 0;
+                case GREATER_EQUAL: return lval.compareTo(rval) >= 0;
+                case LESS:          return lval.compareTo(rval) < 0;
+                case LESS_EQUAL:    return lval.compareTo(rval) <= 0;
+            }
         }
-        return modelize(sql, values);
+        return false;
+    }
+    private boolean compare(Object model, Field field, Object rvalue1, Object rvalue2) { // for BETWEEN
+        Object lvalue;
+        try {
+            field.setAccessible(true);
+            lvalue = field.get(model);
+        } catch (IllegalAccessException e) { return false; }
+
+        Class<?> type = field.getType();
+        if(TypeMap.isNumeric(type)) {
+            double rval1, rval2;
+            if(rvalue1 instanceof Number && rvalue2 instanceof Number) {
+                rval1 = Double.parseDouble(String.valueOf(rvalue1));
+                rval2 = Double.parseDouble(String.valueOf(rvalue2));
+            } else if(rvalue1 instanceof String && rvalue2 instanceof String) {
+                rval1 = Double.valueOf((String) rvalue1);
+                rval2 = Double.valueOf((String) rvalue2);
+            } else return false;
+            double lval = Double.parseDouble(String.valueOf(lvalue));
+            return rval1<=lval && lval<=rval2;
+        } else if(TypeMap.isTemporal(type)) {
+            Date rval1, rval2;
+            if(rvalue1 instanceof Date && rvalue2 instanceof Date) {
+                rval1 = ((Date) rvalue1);
+                rval2 = ((Date) rvalue2);
+            } else if (rvalue1 instanceof String && rvalue2 instanceof String) {
+                try {
+                    rval1 = DateFormat.getInstance().parse((String) rvalue1);
+                    rval2 = DateFormat.getInstance().parse((String) rvalue2);
+                } catch (ParseException e) {
+                    return false;
+                }
+            } else return false;
+            Date lval = ((Date) lvalue);
+            return lval.after(rval1) && lval.before(rval2);
+        } else {    // Textual
+            String rval1 = rvalue1.toString();
+            String rval2 = rvalue2.toString();
+            String lval = lvalue.toString();
+            return lval.compareTo(rval1)>=0 && lval.compareTo(rval2)<=0;
+        }
+    }
+    private ArrayList<Object> findByOperator(String field, CompareOperator operator, Object... values) {
+        if(hasCache()) {
+            ArrayList<Object> res =  new ArrayList<>();
+            for (Object o : caches.get(this.getClass())) {
+                try {
+                    Field f = o.getClass().getDeclaredField(field);
+                    f.setAccessible(true);
+                    Object val = f.get(o);
+                    switch (operator) {
+                        case EQUAL:
+                        case NOT_EQUAL:
+                        case GREATER:
+                        case GREATER_EQUAL:
+                        case LESS:
+                        case LESS_EQUAL:
+                            if(values.length==1 && compare(o, f, values[0], operator)) res.add(o); break;
+                        case NULL:
+                            if(val==null) res.add(o); break;
+                        case NOT_NULL:
+                            if(val!=null) res.add(o); break;
+                        case BETWEEN:
+                            if(values.length==2 && compare(o, f, values[0], values[1])) res.add(o); break;
+                        case LIKE:  // only valid for strings
+                            if(values.length==1 && TypeMap.isTextual(f.getType())
+                                    && (val.toString().contains(values[0].toString()))) res.add(o); break;
+                    }
+                } catch (NoSuchFieldException | IllegalAccessException e) { }
+            }
+            return res;
+        } else {
+            String clazzName = this.getClass().getSimpleName();
+            String sqlName = String.format("find_%s(%s)_%s", clazzName, field, operator);
+            String sql = sqlTemplates.get(sqlName);
+            if(sql==null) {
+                Query.Condition sqlCond = sqlBuilder.select("*")
+                        .from(clazzName).where(field);
+                switch (operator) {
+                    case NULL:          sql = sqlCond.isnull().end(); break;
+                    case NOT_NULL:      sql = sqlCond.isnotnull().end(); break;
+                    case EQUAL:         sql = sqlCond.eq().end(); break;
+                    case NOT_EQUAL:     sql = sqlCond.ne().end(); break;
+                    case GREATER:       sql = sqlCond.gt().end(); break;
+                    case GREATER_EQUAL: sql = sqlCond.ge().end(); break;
+                    case LESS:          sql = sqlCond.lt().end(); break;
+                    case LESS_EQUAL:    sql = sqlCond.le().end(); break;
+                    case BETWEEN:       sql = sqlCond.between().end(); break;
+                    case LIKE:          sql = sqlCond.like().end(); break;
+                }
+                sqlTemplates.put(sqlName, sql);
+            }
+            return modelize(sql, values);
+        }
     }
     public ArrayList<Object> findNull(String field) { return findByOperator(field, CompareOperator.NULL); }
     public ArrayList<Object> findNotNull(String field) { return findByOperator(field, CompareOperator.NOT_NULL); }
@@ -91,33 +224,52 @@ public abstract class Model {
     public ArrayList<Object> findBetween(String field, Object minValue, Object maxValue) { return findByOperator(field, CompareOperator.BETWEEN, minValue, maxValue);}
     public ArrayList<Object> findLike(String field, Object value) { return findByOperator(field, CompareOperator.LIKE, value);}
     public ArrayList<Object> find(String sqlCondition) {
+        if(hasCache()) {
+            System.out.println("This method doesn't work under Cached Mode.");
+            return new ArrayList<>();
+        }
+
         String sql = String.format("SELECT * FROM %s WHERE %s;", this.getClass().getSimpleName(), sqlCondition);
         return modelize(sql);
     }
     public ArrayList<Object> all() {
-        String clazzName = this.getClass().getSimpleName();
-        String sqlName = String.format("all_%s", clazzName);
-        String sql = sqlTemplates.get(sqlName);
-        if(sql==null) {
-            sql = String.format("SELECT * FROM %s;", clazzName);
-            sqlTemplates.put(sqlName, sql);
+        if(hasCache()) {
+            return caches.get(this.getClass());
+        } else {
+            String clazzName = this.getClass().getSimpleName();
+            String sqlName = String.format("all_%s", clazzName);
+            String sql = sqlTemplates.get(sqlName);
+            if(sql==null) {
+                sql = String.format("SELECT * FROM %s;", clazzName);
+                sqlTemplates.put(sqlName, sql);
+            }
+            return modelize(sql);
         }
-        return modelize(sql);
     }
     public Object get(String field, Object value) {
-        String clazzName = this.getClass().getSimpleName();
-        String sqlName = String.format("get_%s(%s)", clazzName, field);
-        String sql = sqlTemplates.get(sqlName);
-        if(sql==null) {
-            sql = sqlBuilder.select("*").from(clazzName)
-                    .where(field).eq().orderBy("update_time", true).limit(1).end();
-            sqlTemplates.put(sqlName, sql);
+        if (hasCache()) {
+            ArrayList<Object> res = findEqual(field, value);
+            return res.size()==1 ? res.get(0) : null;   // 注意这个函数在缓存模式下的工作方式略有不同
+        } else {
+            String clazzName = this.getClass().getSimpleName();
+            String sqlName = String.format("get_%s(%s)", clazzName, field);
+            String sql = sqlTemplates.get(sqlName);
+            if(sql==null) {
+                sql = sqlBuilder.select("*").from(clazzName)
+                        .where(field).eq().orderBy("update_time", true).limit(1).end();
+                sqlTemplates.put(sqlName, sql);
+            }
+            ArrayList<Object> res = modelize(sql, value);
+            if(res.size()==1) return res.get(0);
+            else return null;
         }
-        ArrayList<Object> res = modelize(sql, value);
-        if(res.size()==1) return res.get(0);
-        else return null;
     }
     public Object get(String sqlCondition) {
+        if(hasCache()) {
+            System.out.println("This method doesn't work under Cached Mode.");
+            return null;
+        }
+
         String sql = String.format("SELECT * FROM %s WHERE %s ORDER BY update_time DESC LIMIT 1;",
                 this.getClass().getSimpleName(), sqlCondition);
         ArrayList<Object> res = modelize(sql);
@@ -125,18 +277,27 @@ public abstract class Model {
         else return null;
     }
     public int count() {
-        String clazzName = this.getClass().getSimpleName();
-        String sqlName = String.format("count_%s", clazzName);
-        String sql = sqlTemplates.get(sqlName);
-        if(sql==null) {
-            sql = String.format("SELECT COUNT(*) FROM %s;", clazzName);
-            sqlTemplates.put(sqlName, sql);
+        if(hasCache()) {
+            return caches.get(this.getClass()).size();
+        } else {
+            String clazzName = this.getClass().getSimpleName();
+            String sqlName = String.format("count_%s", clazzName);
+            String sql = sqlTemplates.get(sqlName);
+            if(sql==null) {
+                sql = String.format("SELECT COUNT(*) FROM %s;", clazzName);
+                sqlTemplates.put(sqlName, sql);
+            }
+            Object res = dbEngine.acquire(sql);
+            if(res==null) return -1;
+            else return ((Number)res).intValue();
         }
-        Object res = dbEngine.acquire(sql);
-        if(res==null) return -1;
-        else return ((Number)res).intValue();
     }
     public int count(String sqlCondition) {
+        if(hasCache()) {
+            System.out.println("This method doesn't work under Cached Mode.");
+            return -1;
+        }
+
         String sql = String.format("SELECT COUNT(*) FROM %s WHERE %s;",
                 this.getClass().getSimpleName(), sqlCondition);
         Object res = dbEngine.acquire(sql);
@@ -145,18 +306,32 @@ public abstract class Model {
     }
     @Deprecated
     public int update(String field, Object value, String sqlCondition) {
+        if(hasCache()) {
+            System.out.println("This method doesn't work under Cached Mode.");
+            return -1;
+        }
+
         String sql = sqlBuilder.update(this.getClass().getSimpleName())
                 .set(field).where(new Query.Condition().setSqlCondition(sqlCondition)).end();
         return dbEngine.execute(sql, value);
     }
     @Deprecated
     public int delete(String sqlCondition) {
+        if(hasCache()) {
+            System.out.println("This method doesn't work under Cached Mode.");
+            return -1;
+        }
+
         String sql = String.format("DELETE FROM %s WHERE %s;", this.getClass().getSimpleName(), sqlCondition);
         return dbEngine.execute(sql);
     }
 
     // Type Mapping and Data Convert
-    public ArrayList<Object> modelize(Query query, Object... values) {
+    protected ArrayList<Object> modelize(Query query, Object... values) {
+        if(hasCache()) {
+            System.out.println("This method doesn't work under Cached Mode.");
+            return new ArrayList<>();
+        }
         String sqlTemplate = query.setColumns("*").end();
         return modelize(sqlTemplate, values);
     }
@@ -169,9 +344,11 @@ public abstract class Model {
             ResultSet rs = dbEngine.query(sqlTemplate, values);
             while (rs.next()) {
                 Object model = clazz.newInstance();
-                HashMap<String, Object> copy = new HashMap<>();
+                HashMap<String, Object> copy = null;
+                boolean cached = modes.get(this.getClass());
+                if(!cached) copy = new HashMap<>(); // 没有本地缓存则开启备份
                 try {
-                    Model.class.getDeclaredField("copy").set(model, copy);
+                    if(!cached) Model.class.getDeclaredField("copy").set(model, copy);
                     ArrayList<Field> fields = new ArrayList<>();
                     fields.addAll(Arrays.asList(clazz.getDeclaredFields()));
                     fields.addAll(Arrays.asList(Model.class.getDeclaredFields()));
@@ -210,7 +387,7 @@ public abstract class Model {
                                     logger.error(String.format("Type '%s' not supported, use VARCHAR instead!", type));
                                 }
                         }
-                        copy.put(field.getName(), field.get(model));    // save a copy
+                        if(copy!=null) copy.put(field.getName(), field.get(model));
                     }
                 } catch (NoSuchFieldException | IllegalAccessException e) { e.printStackTrace(); }
                 models.add(model);
@@ -287,18 +464,12 @@ public abstract class Model {
         if(dbEngine.execute(sql)!=0) logger.warn("CREATE TABLE returned None-Zero value, maybe a fault.");
     }
 
-    // Operations on one record
+    // Operations on one record  (for any model instance)
     public boolean exists() { return id!=null; }
     public boolean remove() { return id!=null && delete(); }
-    public boolean save() {    // INSERT or UPDATE changed fields only
-        return id==null ? insert() : update(true);
-    }
-    @Deprecated
-    public boolean push() {    // INSERT or UPDATE all fields, you'd better ALWAYS use save()
-        return id==null ? insert() : update(false);
-    }
+    public boolean save() { return id==null ? insert() : update(); }
 
-    // encapsulation for security (of Manager objects)
+    // encapsulation for security
     private boolean insert() {
         if(isManager()) return false;
 
@@ -350,11 +521,14 @@ public abstract class Model {
         id = ((Number) res.get(0)).intValue();
         create_time = res.get(1) instanceof Timestamp ? (Timestamp) res.get(1) : Timestamp.valueOf(res.get(1).toString());
         update_time = res.get(2) instanceof Timestamp ? (Timestamp) res.get(2) : Timestamp.valueOf(res.get(2).toString());
+
+        if(hasCache()) caches.get(this.getClass()).add(this);
         return true;
     }
-    private boolean update(boolean diffOnly) {
+    private boolean update() {
         if(isManager()) return false;
 
+        boolean diffOnly = !hasCache(); // 有cache则全字段更新；没cache则copy有效，增量更新
         Class<? extends Model> clazz = this.getClass();
         String clazzName = clazz.getSimpleName();
         Field[] fields = clazz.getDeclaredFields();
@@ -404,28 +578,14 @@ public abstract class Model {
             return false;
         }
         id = null;
+
+        if(hasCache()) if(hasCache()) caches.get(this.getClass()).remove(this);
         return true;
     }
-    private boolean isManager() {
-        boolean isManager = false;
-        Class<?> clazz = this.getClass();
-        try {
-            clazz.getField("objects").setAccessible(true);
-            if(clazz.getField("objects").get(this)==this) isManager = true;
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            AccessibleObject.setAccessible(clazz.getDeclaredFields(), true);
-            try {
-                for (Field field : clazz.getDeclaredFields()) {
-                    if(field.getDeclaredAnnotation(Manager.class)!=null && field.get(this)==this)
-                    { isManager = true; break;}
-                }
-            } catch (IllegalAccessException e1) { /* then it's save to save */ }
-        }
-        if(isManager) logger.warn("Should never save/push/remove the Manager.");
-        return isManager;
-    }
+    private boolean isManager() { return managers.get(this.getClass())==this; }
+    private boolean hasCache() { return caches.get(this.getClass())!=null; }
 
-    // Getters of conventional fields for security
+    // Getters of conventional fields
     public Integer getId() { return id; }
     public Timestamp getCreateTime() { return create_time; }
     public Timestamp getUpdateTime() { return update_time; }

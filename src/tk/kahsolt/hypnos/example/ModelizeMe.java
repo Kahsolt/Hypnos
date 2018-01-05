@@ -1,6 +1,7 @@
 package tk.kahsolt.hypnos.example;
 
 import tk.kahsolt.hypnos.Hypnos;
+import tk.kahsolt.hypnos.model.Cache;
 import tk.kahsolt.hypnos.model.FieldEntry;
 import tk.kahsolt.hypnos.model.Manager;
 import tk.kahsolt.hypnos.model.Model;
@@ -12,6 +13,8 @@ public class ModelizeMe extends Model {
 
     @Manager
     public static ModelizeMe manager;    // 自定义管理器字段名
+    @Cache
+    public static ArrayList<Types> cache;
 
     @FieldEntry(length = 32)
     public String name;

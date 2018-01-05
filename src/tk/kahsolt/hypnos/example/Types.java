@@ -6,12 +6,15 @@ import tk.kahsolt.hypnos.model.*;
 import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
+import java.util.ArrayList;
 import java.util.UUID;
 
 public class Types extends Model {
 
     @Manager
     public static Model objects;
+    //@Cache
+    //public static ArrayList<Types> cache;
 
     @FieldEntry
     public Byte byte_r;
@@ -101,10 +104,8 @@ public class Types extends Model {
         t.nstring = "New String";
         t.object = "Also a string";
         t.save();
-        // 若无修改也可以用push强制全字段更新
-        t.push();
 
-        // tt和t是同一个数据记录
+        // tt和t是同一个数据记录（缓存模式下会取得空指针）
         Types tt = (Types) Types.objects.get("id", t.getId());
         System.out.println("[tt] = " + tt);
         // 用tt指针删了这个记录(数据库记录删除，本地数据还在)
@@ -114,13 +115,7 @@ public class Types extends Model {
         // 此时保存t将产生SQL动作但不会起作用(删除优先级较高，记录已不存在)
         t.byte_r = null;
         t.save();
-        t.push();
         System.out.println("Count3=" + Types.objects.count());
-
-        // 但tt的数据还在本地，可以再次save()/push()产生数据相同的记录(但是id是新的)
-        tt.push();
-        System.out.println("[tt] = " + tt);
-        System.out.println("Count4=" + Types.objects.count());
 
         hypnos.stop();
     }

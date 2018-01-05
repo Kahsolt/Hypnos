@@ -3,8 +3,7 @@
     <output-path>$PROJECT_DIR$/out/artifacts/Hypnos_jar</output-path>
     <root id="archive" name="Hypnos.jar">
       <element id="module-output" name="Hypnos" />
-      <element id="extracted-dir" path="$PROJECT_DIR$/../SQLBuilder/out/artifacts/SQLBuilder_jar/SQLBuilder.jar" path-in-jar="/" />
-      <element id="library" level="project" name="lib" />
+      <element id="library" level="project" name="SQLBuilder" />
     </root>
   </artifact>
 </component>

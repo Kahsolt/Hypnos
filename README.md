@@ -22,6 +22,57 @@
     - Intellij artifact - JAR
 
 ## Changelog
+  - v0.3
+```java
+/* 1. 删去了危险的push()方法
+ * 2. 新增Cache模式，即增加一个被@Cache注解修饰的字段作为本地缓存
+ *    Hypnos启动时会一次性将整个表模型化，读入内存，之后基本就全是
+ *    本地操作而节省数据库查询的开销
+ *      - 此模式不支持增量更新，也不支持含有自定义SQL条件的查询
+ *      - 此模式暂未经过大量测试可能有很多BUG
+ *      - 此模式特别适合频繁修改的小表
+ *    如下例所示，有个有趣的现象：
+ *      启用cache：
+ *        生成数据+查询：耗时340左右
+ *        已有数据+查询：耗时550左右
+ *      不启用cache：
+ *        生成数据+查询：耗时1500左右
+ *        已有数据+查询：耗时1900左右
+ *      生成数据反而比从数据库取现有数据快，说明了瓶颈在于类型映射和转换
+ */
+public class CachedModel extends Model {
+
+    @Manager
+    public static CachedModel objects;
+    @Cache
+    public static ArrayList<CachedModel> cache;
+
+    @FieldEntry
+    public UUID uuid;
+
+    public static void main(String[] args) {
+        // 启动Hypnos
+                
+        CachedModel.beginUpdate();   // 先插入很多数据，等会计时的时候注释掉
+        for (int i = 0; i < 1500; i++) {
+            new CachedModel(UUID.randomUUID()).save();
+        }
+        CachedModel.endUpdate();
+        
+        long start, end;
+        start = System.currentTimeMillis();
+        Random random = new Random();
+        for (int i = 0; i < 100; i++) {
+            Integer rand = random.nextInt(50);
+            CachedModel.objects.findLike("uuid", rand.toString()).size();
+        }
+        end = System.currentTimeMillis();
+
+        System.out.println(String.format("Time spend: %d",end - start));
+        // 停止Hypnos
+    }
+}
+```
   - v0.2
 ```java
 /* 1. 基模型原生筛选器只支持单条件筛选，对于复杂条件不友好
@@ -170,21 +221,21 @@ hypnos.stop();
 public static Model objects;    // 实际上Model也可换为该模型类的名字如User
 ```
   可间接视作抽象类Model即基模型的实例，它只拥有Model类所定义的最基本方法，主要有以下四类：
-  0. 模型转换器
+  1. 模型转换器
      - modelize()：提交SQL查询接收模型，下述模型集合操作方法都是基于此方法实现的
-  1. 模型集合操作
+  2. 模型集合操作
      - all()：     返回该表所有模型
      - get()：     查找满足指定条件的模型，若有多个则返回修改时间最新的那个
      - findXXX()： 一组方法，筛选出满足指定条件的模型（可参考example.Filters）
      - count()：   对全表模型计数或按指定条件计数
      - update()：  按指定条件更新全表记录的某一列
      - delete()：  按指定条件删除全表的某些模型
-  2. 模型操作
+  3. 模型操作
      - save()：    将这个模型存入数据库(自动判断插入或更新)，更新使用增量更新
      - push()：    同save()，但更新是强制的全字段更新【确保理解了exmaple.Types中的实例再谨慎使用！】
      - remove()：  从数据库删除这个模型
      - exists()：  判断该模型是否在数据库中现在有/曾经有记录(本质即是否分配了主键id)
-  3. 内定字段访问器
+  4. 内定字段访问器
      - getId()：           查看该模型的数据库自增主键的编号
      - getCreateTime()：   查看该模型的创建时间
      - getUpdateTime()：   查看该模型的最后修改时间

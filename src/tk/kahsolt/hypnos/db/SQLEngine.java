@@ -54,7 +54,7 @@ public abstract class SQLEngine {
      *   执行失败返回值==-1
      */
     public int execute(String sqlTemplate, Object... parameters) {
-        logger.info("\\Execute\\ " + sqlTemplate);
+        logger.debug("\\Execute\\ " + sqlTemplate);
         try {
             PreparedStatement ps = dbConnection.prepareStatement(sqlTemplate);
             for (int i = 1; i <= parameters.length; i++) ps.setObject(i, parameters[i-1]);
@@ -77,7 +77,7 @@ public abstract class SQLEngine {
      *   query      取结果集ResultSet(记得关闭)  类型映射在Model.modalize()中处理，用于模型化
      */
     public Object acquire(String sqlTemplate, Object... parameters) {
-        logger.info("/Acquire/ " + sqlTemplate);
+        logger.debug("/Acquire/ " + sqlTemplate);
         try {
             ResultSet rs = query(sqlTemplate, parameters);
             rs.next();
@@ -88,7 +88,7 @@ public abstract class SQLEngine {
         return null;
     }
     public ArrayList<Object> fetch(String sqlTemplate, Object... parameters) {
-        logger.info("/Fetch/ " + sqlTemplate);
+        logger.debug("/Fetch/ " + sqlTemplate);
         try {
             ResultSet rs = query(sqlTemplate, parameters);
             ArrayList<Object> res = new ArrayList<>();
@@ -101,7 +101,7 @@ public abstract class SQLEngine {
         return new ArrayList<>();
     }
     public ResultSet query(String sqlTemplate, Object... parameters) {
-        logger.info("/Query/ " + sqlTemplate);
+        logger.debug("/Query/ " + sqlTemplate);
         try {
             // FIXME: 这个实现很不安全，如果有两个以上LIKE就会失败，若确有需要请用非含参SQL查询
             if(sqlTemplate.contains(" LIKE ")) parameters[0] = String.format("%%%s%%", parameters[0]);
