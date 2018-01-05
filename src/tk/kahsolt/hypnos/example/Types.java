@@ -13,50 +13,50 @@ public class Types extends Model {
     @Manager
     public static Model objects;
 
-    @Column
+    @FieldEntry
     public Byte byte_r;
-    @Column
+    @FieldEntry
     public byte byte_v;
-    @Column
+    @FieldEntry
     public Short short_r;
-    @Column
+    @FieldEntry
     public short short_v;
-    @Column
+    @FieldEntry
     public Integer int_r;
-    @Column
+    @FieldEntry
     public int int_v;
-    @Column
+    @FieldEntry
     public Long long_r;
-    @Column
+    @FieldEntry
     public long long_v;
-    @Column
+    @FieldEntry
     public Float float_r;
-    @Column
+    @FieldEntry
     public float float_v;
-    @Column
+    @FieldEntry
     public Double double_r;
-    @Column
+    @FieldEntry
     public double double_v;
 
-    @Column(length = 64)
+    @FieldEntry(length = 64)
     public String string;
-    @Column(length = -32)
+    @FieldEntry(length = -32)
     public String nstring;
-    @Column(length = 0)
+    @FieldEntry(length = 0)
     public String text;
-    @Column
+    @FieldEntry
     public UUID uuid;
 
-    @Column
+    @FieldEntry
     public java.util.Date datetime;
-    @Column
+    @FieldEntry
     public java.sql.Date date;
-    @Column
+    @FieldEntry
     public Time time;
-    @Column(initSetCurrent = true)
+    @FieldEntry(initSetCurrent = true)
     public Timestamp timestamp;
 
-    @Column
+    @FieldEntry
     public Object object;
 
 

@@ -1,12 +1,11 @@
 package tk.kahsolt.hypnos.example.blog;
 
-import tk.kahsolt.hypnos.Hypnos;
 import tk.kahsolt.hypnos.model.*;
 
 import java.util.ArrayList;
 
 // 1.继承Model设计一个模型
-@Table(comment = "就是用户表啊")
+@ModelEntry(comment = "就是用户表啊")
 public class User extends Model {
 
     // 约定的内定字段(Hypnos会注入一个模型实例作管理者，方便以伪静态的方式调用findXXX()类函数)
@@ -14,15 +13,15 @@ public class User extends Model {
     public static Model objects;            // 一个静态实例代表整个模型(伪管理者模式)
 
     // 定义数据库表的字段
-    @Column(unique = true, notNull = true)
+    @FieldEntry(unique = true, notNull = true)
     public String username;
-    @Column(length = 64, notNull = true, defaultValue = "<NEED_CHANGE>")
+    @FieldEntry(length = 64, notNull = true, defaultValue = "<NEED_CHANGE>")
     public String password;
-    @Column(length = -8, defaultValue = "male")
+    @FieldEntry(length = -8, defaultValue = "male")
     public String gender;
-    @Column(defaultValue = "0")
+    @FieldEntry(defaultValue = "0")
     public Short age;
-    @Column(defaultValue = "0.0", comment = "用户余额")
+    @FieldEntry(defaultValue = "0.0", comment = "用户余额")
     public Double money;
 
     // 定义构造函数，通常会比较方便save()

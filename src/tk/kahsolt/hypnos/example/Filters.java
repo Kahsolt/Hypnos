@@ -1,7 +1,7 @@
 package tk.kahsolt.hypnos.example;
 
 import tk.kahsolt.hypnos.Hypnos;
-import tk.kahsolt.hypnos.model.Column;
+import tk.kahsolt.hypnos.model.FieldEntry;
 import tk.kahsolt.hypnos.model.Manager;
 import tk.kahsolt.hypnos.model.Model;
 
@@ -12,11 +12,11 @@ public class Filters extends Model {
     @Manager
     public static Model objects;
 
-    @Column
+    @FieldEntry
     public int x;
-    @Column
+    @FieldEntry
     public double y;
-    @Column
+    @FieldEntry
     public String s;
 
     public Filters() { }
@@ -34,7 +34,7 @@ public class Filters extends Model {
         hypnos.start();
 
         Random random = new Random();
-        Model.dbEngine.begin();   // for butch INSERT should not auto-commit
+        Filters.beginUpdate();   // for butch INSERT should not auto-commit
         for (int i = 0; i < 100; i++) {
             String x;
             if(random.nextDouble()>=0.2) x = "1345asd";
@@ -45,9 +45,10 @@ public class Filters extends Model {
             Filters filters = new Filters(random.nextInt(), random.nextDouble(), x);
             filters.save();
         }
-        Model.dbEngine.commit();
+        Filters.endUpdate();
+
         System.out.println(Filters.objects.all().size());
-        System.out.println(Filters.objects.count());
+        System.out.println(Filters.objects.count());    // 显然比all().size()快
         System.out.println(Filters.objects.count("x > 5"));
         System.out.println(Filters.objects.findEqual("x",5).size());
         System.out.println(Filters.objects.findNotEqual("x",5).size());

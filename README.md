@@ -4,7 +4,7 @@
     Hyperlight-weight SQL wrapper(or pseudo-ORM framework) for SQLite3
     Originally aimed to help with Minecraft plugin development
 
-### General
+## General
   - Dependencies
     - [SQLBuilder](https://github.com/Kahsolt/SQLBuilder)
     - jdbc driver(sqlite/mysql)
@@ -21,14 +21,51 @@
   - IDE Builds
     - Intellij artifact - JAR
 
-### Tutorial
+## Changelog
+  - v0.2
+```java
+/* 1. 基模型原生筛选器只支持单条件筛选，对于复杂条件不友好
+ *    因此开放了modelize()方法，可以更方便开发
+ *    因而删除了原来与dbEngine相关的接口
+ * 2. Manager注入策略修改为优先查找名为objects的字段
+ *    其次查找被注解Manager修饰的字段
+ */
+public ArrayList<ModelizeMe> getPoorUsers() {
+    // 1. 生成SQL查询对象，准备值
+    Query sql = sqlBuilder.select()  // 参数填"*"或留空，如果填了其他东西最终会被改写为"*"【不允许产生部分模型！】
+            .from(this.getClass().getSimpleName())
+            .where("money").lt();
+    int val = 10;
 
-#### Step One: Design Your Model and Services
-  1. 模型类-数据表：自定义模型继承自model.Model类，并可用model.Table加以注解并配置
-  2. 表字段-数据列：需要映射数据库列的字段必须加以model.Column注解，用法重点参考下列文档
-      - model.Column   字段配置注解
-      - model.TypeMap  字段-列数据类型映射表（可参考example.Types）
-  3. 模型集合管理器：每个模型类建议定义一个名为objects的字段作为该模型集合的管理器，由Hypnos自动注入
+    // 2. 调用modelize()获取模型，适当做类型转换(啊为什么没有map()之类的函数啊)
+    ArrayList<Object> objects = modelize(sql, val);
+    ArrayList<ModelizeMe> ModelizeMes = new ArrayList<>();
+    for(Object o : objects) {
+        ModelizeMes.add((ModelizeMe) o);
+    }
+    return ModelizeMes;
+}
+ArrayList<Object> users = ModelizeMe.manager.all(); // 使用了自定义名字为manager的字段充当模型管理器
+```
+```java
+ModelizeMe{id='1', name='kahsolt', money=2, create_time='2018-01-05 07:18:45.0', update_time='2018-01-05 07:18:45.0'}
+ModelizeMe{id='2', name='luper', money=5, create_time='2018-01-05 07:18:45.0', update_time='2018-01-05 07:18:45.0'}
+```
+
+  - v0.1
+    基本功能OK，参考下文初版Tutorial
+
+## Tutorial
+
+### Step One: Design Your Model and Services
+  1. 模型类-数据表：
+      - model.Model：      模型基类，自定义模型必须继承自它
+      - model.TableEntry： 表配置注解
+  2. 表字段-数据列：
+      - model.FieldEntry： 字段配置注解
+      - model.TypeMap：    字段-列数据类型映射表（可参考example.Types）
+  3. 模型集合管理器：
+      - model.Manager：    模型管理器字段公约，建议为每个模型类定义一个字段作为该模型集合的管理器
   4. 无参构造函数：模型类必须有一个无参构造函数，Hypnos会使用它
   5. 业务逻辑：基类Model提供了一些基本的增删改查方法，可以借助这些方法快速书写自定义业务
     
@@ -103,21 +140,17 @@ public class User extends Model {
 }
 ```
 
-#### Step Two: Config and Start Hypnos Engine
+### Step Two: Config and Start Hypnos Engine
   1. 流程：准备数据库dbUri-构造Hypnos对象-注册你的模型-启动Hypnos引擎
   2. 可以使用的几个根对象及其方法概览：
       - hypnos实例方法
-        - register()    向引擎注册自定义的模型
-        - start()       启动引擎
-        - stop()        关闭引擎
-      - SQLEngine类静态成员
-        - sqlBuilder    SQLBuilder类对象，方便生成SQL语句
+        - register()：向引擎注册自定义的模型
+        - start()：启动引擎
+        - stop()：关闭引擎
       - Model类静态成员
-        - dbEngine      SQLEngine类对象，即所有模型类共享的数据库连接
-          - beigin()/commit()                   用于手动事务管理
-          - execute()/acquire()/fetch()/query() 用于执行sql语句并取得结果
-      - 自定义模型类静态成员
-        - dbEngine      与Model.dbEngine指向同一个对象
+        - sqlBuilder：SQLBuilder类对象，方便生成SQL语句
+        - beiginUpdate()/endUpdate()：用于批量SQL执行时手动事务管理
+      - 自定义模型静态成员(比Model类多一个模型管理器)
         - objects       本质是该类的一个普通对象，作为方便管理该类模型的集合的管理器（但无法被save()/remove()）
 ```java
 import tk.kahsolt.hypnos.Hypnos;
@@ -131,28 +164,30 @@ hypnos.start();
 hypnos.stop();
 ```
 
-#### Step Three: Time for Business
-  以我们约定的模型管理器objects为例，通常它的定义形如：
+### Step Three: Time for Business
+  以我们约定的模型管理器objects对象为例，通常它的定义形如：
 ```java
 public static Model objects;    // 实际上Model也可换为该模型类的名字如User
 ```
-  可间接视作抽象类Model即基模型的实例，它只拥有Model类所定义的最基本方法，主要有以下三类：
+  可间接视作抽象类Model即基模型的实例，它只拥有Model类所定义的最基本方法，主要有以下四类：
+  0. 模型转换器
+     - modelize()：提交SQL查询接收模型，下述模型集合操作方法都是基于此方法实现的
   1. 模型集合操作
-     - all()     返回该表所有模型
-     - get()     查找满足指定条件的模型，若有多个则返回修改时间最新的那个
-     - findXXX() 一组方法，筛选出满足指定条件的模型（可参考example.Filters）
-     - count()   对全表模型计数或按指定条件计数
-     - update()  按指定条件更新全表记录的某一列
-     - delete()  按指定条件删除全表的某些模型
+     - all()：     返回该表所有模型
+     - get()：     查找满足指定条件的模型，若有多个则返回修改时间最新的那个
+     - findXXX()： 一组方法，筛选出满足指定条件的模型（可参考example.Filters）
+     - count()：   对全表模型计数或按指定条件计数
+     - update()：  按指定条件更新全表记录的某一列
+     - delete()：  按指定条件删除全表的某些模型
   2. 模型操作
-     - save()    将这个模型存入数据库(自动判断插入或更新)，更新使用增量更新
-     - push()    同save()，但更新是强制的全字段更新【确保理解了exmaple.Types中的实例再谨慎使用！】
-     - remove()  从数据库删除这个模型
-     - exists()  判断该模型是否在数据库中现在有/曾经有记录(本质即是否分配了主键id)
+     - save()：    将这个模型存入数据库(自动判断插入或更新)，更新使用增量更新
+     - push()：    同save()，但更新是强制的全字段更新【确保理解了exmaple.Types中的实例再谨慎使用！】
+     - remove()：  从数据库删除这个模型
+     - exists()：  判断该模型是否在数据库中现在有/曾经有记录(本质即是否分配了主键id)
   3. 内定字段访问器
-     - getId()           查看该模型的数据库自增主键的编号
-     - getCreateTime()   查看该模型的创建时间
-     - getUpdateTime()   查看该模型的最后修改时间
+     - getId()：           查看该模型的数据库自增主键的编号
+     - getCreateTime()：   查看该模型的创建时间
+     - getUpdateTime()：   查看该模型的最后修改时间
   
   以教程开头定义的表User和Message为例，以下是一些模型使用的例子：
   

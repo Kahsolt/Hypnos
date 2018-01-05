@@ -96,6 +96,11 @@ public class Demo {
         System.out.println("User counts = " + User.objects.count());
         System.out.println("Message counts = " + Message.objects.count());
 
+        // 这些操作对模型管理器是无效的
+        User.objects.save();
+        User.objects.push();
+        User.objects.remove();
+
         // 4.关闭引擎
         hypnos.stop();
     }
