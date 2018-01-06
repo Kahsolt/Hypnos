@@ -30,7 +30,6 @@ public final class Hypnos {
     private String dbUri;
     private SQLEngine dbEngine;
     private ArrayList<Class<? extends Model>> modelList = new ArrayList<>();
-    private boolean prefetch = false;
 
     public Hypnos() { }
     public Hypnos(String dbUri) { this.dbUri = dbUri; }

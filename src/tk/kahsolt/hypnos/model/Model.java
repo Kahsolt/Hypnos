@@ -8,7 +8,6 @@
 
 package tk.kahsolt.hypnos.model;
 
-import jdk.nashorn.internal.parser.DateParser;
 import org.apache.log4j.Logger;
 import tk.kahsolt.hypnos.db.SQLEngine;
 import tk.kahsolt.hypnos.db.MySQLEngine;
@@ -100,10 +99,10 @@ public abstract class Model {
             switch (operator) {
                 case EQUAL:         return lval==rval;
                 case NOT_EQUAL:     return lval!=rval;
-                case GREATER:
-                case GREATER_EQUAL: return lval.after(rval);
-                case LESS:
-                case LESS_EQUAL:    return lval.before(rval);
+                case GREATER:       return lval.after(rval);
+                case GREATER_EQUAL: return lval==rval||lval.after(rval);
+                case LESS:          return lval.before(rval);
+                case LESS_EQUAL:    return lval==rval || lval.before(rval);
             }
         } else {    // Textual
             String rval = (String) rvalue;

@@ -6,7 +6,6 @@ import tk.kahsolt.hypnos.model.*;
 import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
-import java.util.ArrayList;
 import java.util.UUID;
 
 public class Types extends Model {

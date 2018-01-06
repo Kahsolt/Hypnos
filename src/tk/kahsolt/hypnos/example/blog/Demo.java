@@ -8,9 +8,6 @@
 package tk.kahsolt.hypnos.example.blog;
 
 import tk.kahsolt.hypnos.Hypnos;
-import tk.kahsolt.hypnos.db.SQLEngine;
-import tk.kahsolt.hypnos.example.Filters;
-import tk.kahsolt.hypnos.model.Model;
 
 import java.util.ArrayList;
 

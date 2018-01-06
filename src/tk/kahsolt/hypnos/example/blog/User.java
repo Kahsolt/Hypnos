@@ -1,6 +1,5 @@
 package tk.kahsolt.hypnos.example.blog;
 
-import tk.kahsolt.hypnos.example.Types;
 import tk.kahsolt.hypnos.model.*;
 
 import java.util.ArrayList;
